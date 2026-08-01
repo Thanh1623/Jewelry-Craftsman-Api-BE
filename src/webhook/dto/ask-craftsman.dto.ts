@@ -5,6 +5,7 @@ import {
   IsString,
   IsUrl,
   IsUUID,
+  MaxLength,
 } from 'class-validator';
 
 export class AskCraftsmanDto {
@@ -30,6 +31,16 @@ export class AskCraftsmanDto {
   @IsOptional()
   @IsInt()
   productBaseSize?: number | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2_000_000)
+  productImageUrl?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2_000_000)
+  referenceImageUrl?: string | null;
 
   @IsString()
   question!: string;

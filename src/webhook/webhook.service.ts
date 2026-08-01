@@ -27,6 +27,8 @@ export class WebhookService {
       productWeightGrams: dto.productWeightGrams,
       productLaborCost: dto.productLaborCost,
       productBaseSize: dto.productBaseSize ?? null,
+      productImageUrl: dto.productImageUrl ?? null,
+      referenceImageUrl: dto.referenceImageUrl ?? null,
       question: dto.question,
       customerNote: dto.customerNote ?? null,
       replyWebhookUrl: dto.replyWebhookUrl,

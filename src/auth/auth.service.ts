@@ -5,6 +5,7 @@ import {
   OnModuleInit,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 
@@ -30,9 +31,14 @@ export class AuthService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
   ) {}
 
   async onModuleInit(): Promise<void> {
+    if (this.configService.get<string>('SEED_DEMO') !== 'true') {
+      return;
+    }
+
     const existing = await this.prisma.user.findUnique({
       where: { email: SEED_CRAFTSMAN_EMAIL },
       select: { id: true },

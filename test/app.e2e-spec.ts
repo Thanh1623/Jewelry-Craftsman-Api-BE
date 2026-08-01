@@ -19,7 +19,11 @@ describe('Health (e2e)', () => {
         onModuleDestroy: jest.fn(),
         $connect: jest.fn(),
         $disconnect: jest.fn(),
-        user: { count: jest.fn().mockResolvedValue(1) },
+        // AuthService seeds the demo craftsman user on boot (SEED_DEMO=true locally)
+        user: {
+          count: jest.fn().mockResolvedValue(1),
+          findUnique: jest.fn().mockResolvedValue({ id: 'seeded' }),
+        },
       })
       .compile();
 

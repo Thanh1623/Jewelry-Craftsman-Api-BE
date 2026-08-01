@@ -36,6 +36,8 @@ model CraftsmanRequest {
   productWeightGrams Float         @map("product_weight_grams")
   productLaborCost   Int           @map("product_labor_cost")
   productBaseSize    Int?          @map("product_base_size")
+  productImageUrl    String?       @map("product_image_url")
+  referenceImageUrl  String?       @map("reference_image_url")
   question           String
   customerNote       String?       @map("customer_note")
   replyWebhookUrl    String        @map("reply_webhook_url")

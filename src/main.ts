@@ -11,6 +11,7 @@ import { AppModule } from './app.module';
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
+  const nodeEnv = configService.get<string>('NODE_ENV', 'development');
 
   app.setGlobalPrefix('api');
   app.use(helmet());
@@ -33,18 +34,19 @@ async function bootstrap(): Promise<void> {
     credentials: true,
   });
 
-  // Swagger để test API
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('Jewelry Craftsman API')
-    .setDescription('REST API for the Jewelry Craftsman service')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document);
+  if (nodeEnv !== 'production') {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('Jewelry Craftsman API')
+      .setDescription('REST API for the Jewelry Craftsman service')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .build();
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api/docs', app, document);
+  }
 
   const port = configService.get<number>('PORT', 3001);
   await app.listen(port);
 }
 
-bootstrap();
+void bootstrap();
