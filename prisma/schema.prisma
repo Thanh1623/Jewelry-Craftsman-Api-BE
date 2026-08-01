@@ -13,6 +13,13 @@ enum RequestStatus {
   @@map("request_status")
 }
 
+enum RequestMessageSender {
+  SHOP
+  CRAFTSMAN
+
+  @@map("request_message_sender")
+}
+
 model User {
   id           String   @id @default(uuid()) @db.Uuid
   email        String   @unique
@@ -23,6 +30,7 @@ model User {
 
   answers           CraftsmanRequest[] @relation("AnsweredBy")
   pushSubscriptions PushSubscription[]
+  messages          RequestMessage[]
 
   @@map("users")
 }
@@ -48,10 +56,27 @@ model CraftsmanRequest {
   createdAt          DateTime      @default(now()) @map("created_at")
   updatedAt          DateTime      @updatedAt @map("updated_at")
 
-  answeredBy User? @relation("AnsweredBy", fields: [answeredById], references: [id], onDelete: SetNull)
+  answeredBy User?            @relation("AnsweredBy", fields: [answeredById], references: [id], onDelete: SetNull)
+  messages   RequestMessage[]
 
   @@index([status, createdAt])
   @@map("craftsman_requests")
+}
+
+model RequestMessage {
+  id        String               @id @default(uuid()) @db.Uuid
+  requestId String               @map("request_id") @db.Uuid
+  senderId  String?              @map("sender_id") @db.Uuid
+  sender    RequestMessageSender
+  content   String
+  imageUrl  String?              @map("image_url")
+  createdAt DateTime             @default(now()) @map("created_at")
+
+  request CraftsmanRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  user    User?            @relation(fields: [senderId], references: [id], onDelete: SetNull)
+
+  @@index([requestId, createdAt])
+  @@map("request_messages")
 }
 
 model PushSubscription {

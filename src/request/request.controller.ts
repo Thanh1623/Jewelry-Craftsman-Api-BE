@@ -15,7 +15,12 @@ import { PaginatedMeta } from '../common/dto/pagination-query.dto';
 import type { JwtPayloadUser } from '../common/interfaces/jwt-payload.interface';
 import { AnswerRequestDto } from './dto/answer-request.dto';
 import { ListRequestsQueryDto } from './dto/list-requests-query.dto';
-import { AnsweredRequestResponse, RequestService } from './request.service';
+import { PostRequestMessageDto } from './dto/post-request-message.dto';
+import {
+  AnsweredRequestResponse,
+  RequestService,
+  RequestWithMessages,
+} from './request.service';
 
 @ApiBearerAuth()
 @ApiTags('Requests')
@@ -31,8 +36,22 @@ export class RequestController {
   }
 
   @Get(':id')
-  getById(@Param('id', ParseUUIDPipe) id: string): Promise<CraftsmanRequest> {
+  getById(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<RequestWithMessages> {
     return this.requestService.getById(id);
+  }
+
+  @Post(':id/messages')
+  postMessage(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: PostRequestMessageDto,
+    @CurrentUser() user: JwtPayloadUser,
+  ): Promise<RequestWithMessages | AnsweredRequestResponse> {
+    return this.requestService.postMessage(id, dto, {
+      sub: user.sub,
+      fullName: user.fullName,
+    });
   }
 
   @Post(':id/answer')

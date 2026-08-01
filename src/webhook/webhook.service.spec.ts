@@ -4,6 +4,7 @@ import { RequestStatus } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../push/push.service';
+import { RequestService } from '../request/request.service';
 import { AskCraftsmanDto } from './dto/ask-craftsman.dto';
 import { WebhookService } from './webhook.service';
 
@@ -24,14 +25,17 @@ describe('WebhookService', () => {
 
   let mockPrisma: {
     craftsmanRequest: { upsert: jest.Mock };
+    requestMessage: { count: jest.Mock };
   };
   let mockPushService: { notifyNewRequest: jest.Mock };
   let mockConfigService: { get: jest.Mock };
+  let mockRequestService: { seedThreadFromRequest: jest.Mock };
   let service: WebhookService;
 
   beforeEach(() => {
     mockPrisma = {
       craftsmanRequest: { upsert: jest.fn() },
+      requestMessage: { count: jest.fn().mockResolvedValue(0) },
     };
     mockPushService = {
       notifyNewRequest: jest.fn().mockResolvedValue(undefined),
@@ -39,11 +43,15 @@ describe('WebhookService', () => {
     mockConfigService = {
       get: jest.fn().mockReturnValue(webhookSecret),
     };
+    mockRequestService = {
+      seedThreadFromRequest: jest.fn().mockResolvedValue(undefined),
+    };
 
     service = new WebhookService(
       mockPrisma as unknown as PrismaService,
       mockConfigService as unknown as ConfigService,
       mockPushService as unknown as PushService,
+      mockRequestService as unknown as RequestService,
     );
   });
 
@@ -78,6 +86,9 @@ describe('WebhookService', () => {
           productName: inputDto.productName,
         }) as Record<string, unknown>,
       }),
+    );
+    expect(mockRequestService.seedThreadFromRequest).toHaveBeenCalledWith(
+      persistedRequest,
     );
     expect(actualResult).toEqual({ ok: true, id: persistedRequest.id });
   });

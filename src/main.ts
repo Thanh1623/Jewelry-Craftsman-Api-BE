@@ -1,20 +1,23 @@
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
+import { join } from 'path';
 
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
 
   app.setGlobalPrefix('api');
-  app.use(helmet());
+  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads' });
+  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   app.use(compression());
   app.use(cookieParser());
   app.useGlobalPipes(

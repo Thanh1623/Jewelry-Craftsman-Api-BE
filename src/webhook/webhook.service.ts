@@ -4,6 +4,7 @@ import { RequestStatus } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../push/push.service';
+import { RequestService } from '../request/request.service';
 import { AskCraftsmanDto } from './dto/ask-craftsman.dto';
 
 @Injectable()
@@ -12,6 +13,7 @@ export class WebhookService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly pushService: PushService,
+    private readonly requestService: RequestService,
   ) {}
 
   async handleAskCraftsman(
@@ -39,6 +41,13 @@ export class WebhookService {
       create: { shopRequestId: dto.requestId, ...data },
       update: data,
     });
+
+    const messageCount = await this.prisma.requestMessage.count({
+      where: { requestId: request.id },
+    });
+    if (messageCount === 0) {
+      await this.requestService.seedThreadFromRequest(request);
+    }
 
     if (request.status === RequestStatus.PENDING) {
       await this.pushService.notifyNewRequest(request);

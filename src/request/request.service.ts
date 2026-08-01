@@ -5,7 +5,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { CraftsmanRequest, Prisma, RequestStatus } from '@prisma/client';
+import {
+  CraftsmanRequest,
+  Prisma,
+  RequestMessage,
+  RequestMessageSender,
+  RequestStatus,
+} from '@prisma/client';
 
 import {
   buildPaginatedMeta,
@@ -14,9 +20,14 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AnswerRequestDto } from './dto/answer-request.dto';
 import { ListRequestsQueryDto } from './dto/list-requests-query.dto';
+import { PostRequestMessageDto } from './dto/post-request-message.dto';
 import { mapRequestToReplyWebhookPayload } from './mappers/reply-webhook.mapper';
 
-export interface AnsweredRequestResponse extends CraftsmanRequest {
+export type RequestWithMessages = CraftsmanRequest & {
+  messages: RequestMessage[];
+};
+
+export interface AnsweredRequestResponse extends RequestWithMessages {
   warning?: string;
 }
 
@@ -51,14 +62,70 @@ export class RequestService {
     return { data, meta: buildPaginatedMeta(page, limit, total) };
   }
 
-  async getById(id: string): Promise<CraftsmanRequest> {
+  async getById(id: string): Promise<RequestWithMessages> {
     const request = await this.prisma.craftsmanRequest.findUnique({
       where: { id },
+      include: {
+        messages: { orderBy: { createdAt: 'asc' } },
+      },
     });
     if (!request) {
       throw new NotFoundException('Không tìm thấy yêu cầu tư vấn.');
     }
+
+    if (request.messages.length === 0) {
+      await this.seedThreadFromRequest(request);
+      const seeded = await this.prisma.craftsmanRequest.findUnique({
+        where: { id },
+        include: {
+          messages: { orderBy: { createdAt: 'asc' } },
+        },
+      });
+      if (!seeded) {
+        throw new NotFoundException('Không tìm thấy yêu cầu tư vấn.');
+      }
+      return seeded;
+    }
+
     return request;
+  }
+
+  async postMessage(
+    id: string,
+    dto: PostRequestMessageDto,
+    craftsman: { sub: string; fullName: string },
+  ): Promise<RequestWithMessages | AnsweredRequestResponse> {
+    const existing = await this.getById(id);
+    if (existing.status === RequestStatus.ANSWERED) {
+      throw new BadRequestException('Yêu cầu này đã được trả lời.');
+    }
+
+    const content =
+      dto.content?.trim() ||
+      (dto.imageUrl ? '[Ảnh đính kèm]' : '');
+    if (!content) {
+      throw new BadRequestException('Nội dung tin nhắn không được để trống.');
+    }
+
+    await this.prisma.requestMessage.create({
+      data: {
+        requestId: id,
+        sender: RequestMessageSender.CRAFTSMAN,
+        senderId: craftsman.sub,
+        content,
+        imageUrl: dto.imageUrl ?? null,
+      },
+    });
+
+    if (dto.sendToShop) {
+      return this.answer(
+        id,
+        { answer: content },
+        craftsman,
+      );
+    }
+
+    return this.getById(id);
   }
 
   async answer(
@@ -72,6 +139,22 @@ export class RequestService {
     }
 
     const answeredAt = new Date();
+
+    // Ensure the final answer appears in the thread if it isn't the last craftsman msg
+    const lastCraftsman = [...existing.messages]
+      .reverse()
+      .find((message) => message.sender === RequestMessageSender.CRAFTSMAN);
+    if (!lastCraftsman || lastCraftsman.content !== dto.answer) {
+      await this.prisma.requestMessage.create({
+        data: {
+          requestId: id,
+          sender: RequestMessageSender.CRAFTSMAN,
+          senderId: craftsman.sub,
+          content: dto.answer,
+        },
+      });
+    }
+
     const updated = await this.prisma.craftsmanRequest.update({
       where: { id },
       data: {
@@ -79,6 +162,9 @@ export class RequestService {
         answer: dto.answer,
         answeredById: craftsman.sub,
         answeredAt,
+      },
+      include: {
+        messages: { orderBy: { createdAt: 'asc' } },
       },
     });
 
@@ -94,6 +180,70 @@ export class RequestService {
         warning:
           'Đã lưu câu trả lời nhưng không thể gửi thông báo về hệ thống shop.',
       };
+    }
+  }
+
+  /** Seed messenger thread from shop ask payload / legacy rows. */
+  async seedThreadFromRequest(
+    request: CraftsmanRequest,
+    options?: { forceNewShopBubble?: boolean },
+  ): Promise<void> {
+    const existingCount = await this.prisma.requestMessage.count({
+      where: { requestId: request.id },
+    });
+    if (existingCount > 0 && !options?.forceNewShopBubble) {
+      return;
+    }
+
+    const rows: Prisma.RequestMessageCreateManyInput[] = [];
+
+    const productBits = [
+      request.productName,
+      `${request.productWeightGrams}g`,
+      `Công ${request.productLaborCost.toLocaleString('vi-VN')}đ`,
+      request.productBaseSize != null ? `Size ${request.productBaseSize}` : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+
+    rows.push({
+      requestId: request.id,
+      sender: RequestMessageSender.SHOP,
+      content: productBits,
+      imageUrl: request.productImageUrl,
+    });
+
+    rows.push({
+      requestId: request.id,
+      sender: RequestMessageSender.SHOP,
+      content: request.question,
+      imageUrl:
+        request.referenceImageUrl &&
+        request.referenceImageUrl !== request.productImageUrl
+          ? request.referenceImageUrl
+          : null,
+    });
+
+    if (request.customerNote?.trim()) {
+      rows.push({
+        requestId: request.id,
+        sender: RequestMessageSender.SHOP,
+        content: `Ghi chú sale: ${request.customerNote.trim()}`,
+      });
+    }
+
+    if (request.status === RequestStatus.ANSWERED && request.answer) {
+      rows.push({
+        requestId: request.id,
+        sender: RequestMessageSender.CRAFTSMAN,
+        senderId: request.answeredById,
+        content: request.answer,
+        createdAt: request.answeredAt ?? undefined,
+      });
+    }
+
+    if (rows.length > 0) {
+      await this.prisma.requestMessage.createMany({ data: rows });
     }
   }
 

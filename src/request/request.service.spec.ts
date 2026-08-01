@@ -1,6 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { RequestStatus } from '@prisma/client';
+import { RequestMessageSender, RequestStatus } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { AnswerRequestDto } from './dto/answer-request.dto';
@@ -19,10 +19,19 @@ describe('RequestService.answer', () => {
     answer: null,
     answeredById: null,
     answeredAt: null,
+    messages: [
+      {
+        id: 'msg-1',
+        sender: RequestMessageSender.SHOP,
+        content: 'Câu hỏi shop',
+        imageUrl: null,
+      },
+    ],
   };
 
   let mockPrisma: {
     craftsmanRequest: { findUnique: jest.Mock; update: jest.Mock };
+    requestMessage: { create: jest.Mock };
   };
   let mockConfigService: { get: jest.Mock };
   let service: RequestService;
@@ -33,6 +42,9 @@ describe('RequestService.answer', () => {
       craftsmanRequest: {
         findUnique: jest.fn().mockResolvedValue(existingRequest),
         update: jest.fn(),
+      },
+      requestMessage: {
+        create: jest.fn().mockResolvedValue({}),
       },
     };
     mockConfigService = { get: jest.fn().mockReturnValue(webhookSecret) };
@@ -69,6 +81,14 @@ describe('RequestService.answer', () => {
       answer: answerDto.answer,
       answeredById: craftsman.sub,
       answeredAt,
+      messages: [
+        ...existingRequest.messages,
+        {
+          id: 'msg-2',
+          sender: RequestMessageSender.CRAFTSMAN,
+          content: answerDto.answer,
+        },
+      ],
     };
     mockPrisma.craftsmanRequest.update.mockResolvedValue(updatedRequest);
 
@@ -108,6 +128,7 @@ describe('RequestService.answer', () => {
       answer: answerDto.answer,
       answeredById: craftsman.sub,
       answeredAt: new Date(),
+      messages: existingRequest.messages,
     };
     mockPrisma.craftsmanRequest.update.mockResolvedValue(updatedRequest);
     fetchSpy.mockResolvedValue(new Response(null, { status: 500 }));

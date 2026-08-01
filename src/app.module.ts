@@ -13,6 +13,7 @@ import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { PushModule } from './push/push.module';
 import { RequestModule } from './request/request.module';
+import { UploadModule } from './upload/upload.module';
 import { UserModule } from './user/user.module';
 import { WebhookModule } from './webhook/webhook.module';
 
@@ -45,6 +46,7 @@ import { WebhookModule } from './webhook/webhook.module';
     UserModule,
     PushModule,
     RequestModule,
+    UploadModule,
     WebhookModule,
   ],
   providers: [

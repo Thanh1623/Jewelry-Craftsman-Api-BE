@@ -1,10 +1,16 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CraftsmanRequest, PushSubscription } from '@prisma/client';
 import * as webpush from 'web-push';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { SubscribeDto } from './dto/subscribe.dto';
+
+function decodeUrlBase64Length(value: string): number {
+  const padding = '='.repeat((4 - (value.length % 4)) % 4);
+  const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
+  return Buffer.from(base64, 'base64').length;
+}
 
 @Injectable()
 export class PushService {
@@ -27,7 +33,7 @@ export class PushService {
     this.vapidConfigured = Boolean(publicKey && privateKey);
 
     if (this.vapidConfigured) {
-      webpush.setVapidDetails(subject, publicKey, privateKey);
+      webpush.setVapidDetails(subject, publicKey!, privateKey!);
     } else {
       this.logger.warn('VAPID keys are not configured — web push is disabled.');
     }
@@ -41,6 +47,15 @@ export class PushService {
     userId: string,
     dto: SubscribeDto,
   ): Promise<Pick<PushSubscription, 'id' | 'endpoint' | 'createdAt'>> {
+    const p256dhBytes = decodeUrlBase64Length(dto.keys.p256dh);
+    const authBytes = decodeUrlBase64Length(dto.keys.auth);
+    // web-push expects uncompressed EC point (65) + 16-byte auth secret
+    if (p256dhBytes !== 65 || authBytes !== 16) {
+      throw new BadRequestException(
+        `Push keys không hợp lệ (p256dh=${p256dhBytes}B, auth=${authBytes}B). Bật lại thông báo trên trình duyệt.`,
+      );
+    }
+
     return this.prisma.pushSubscription.upsert({
       where: { endpoint: dto.endpoint },
       create: {
@@ -103,11 +118,16 @@ export class PushService {
     } catch (error) {
       const statusCode =
         error instanceof webpush.WebPushError ? error.statusCode : undefined;
+      const message = (error as Error).message;
       this.logger.warn(
-        `Push failed for subscription ${subscription.id}: ${(error as Error).message}`,
+        `Push failed for subscription ${subscription.id}: ${message}`,
       );
-      // ponytail: gone/expired subscriptions (410/404) are pruned; other errors just log
-      if (statusCode === 404 || statusCode === 410) {
+      // prune gone endpoints and corrupt key material so craftsman can re-subscribe cleanly
+      const shouldPrune =
+        statusCode === 404 ||
+        statusCode === 410 ||
+        /p256dh|auth/i.test(message);
+      if (shouldPrune) {
         await this.prisma.pushSubscription
           .delete({ where: { id: subscription.id } })
           .catch(() => undefined);
