@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
@@ -16,6 +17,7 @@ import type { JwtPayloadUser } from '../common/interfaces/jwt-payload.interface'
 import { AnswerRequestDto } from './dto/answer-request.dto';
 import { ListRequestsQueryDto } from './dto/list-requests-query.dto';
 import { PostRequestMessageDto } from './dto/post-request-message.dto';
+import { UpdateRequestStatusDto } from './dto/update-request-status.dto';
 import {
   AnsweredRequestResponse,
   RequestService,
@@ -40,6 +42,14 @@ export class RequestController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<RequestWithMessages> {
     return this.requestService.getById(id);
+  }
+
+  @Patch(':id/status')
+  updateStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateRequestStatusDto,
+  ): Promise<RequestWithMessages> {
+    return this.requestService.updateStatus(id, dto.status);
   }
 
   @Post(':id/messages')

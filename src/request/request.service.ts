@@ -90,6 +90,36 @@ export class RequestService {
     return request;
   }
 
+  async updateStatus(
+    id: string,
+    status: RequestStatus,
+  ): Promise<RequestWithMessages> {
+    const existing = await this.getById(id);
+
+    if (status === RequestStatus.IN_PROGRESS) {
+      if (existing.status === RequestStatus.ANSWERED) {
+        throw new BadRequestException('Yêu cầu đã hoàn thành, không nhận lại.');
+      }
+      if (existing.status === RequestStatus.IN_PROGRESS) {
+        return existing;
+      }
+    } else if (status === RequestStatus.PENDING) {
+      if (existing.status === RequestStatus.ANSWERED) {
+        throw new BadRequestException('Không mở lại yêu cầu đã trả lời.');
+      }
+    } else if (status === RequestStatus.ANSWERED) {
+      throw new BadRequestException(
+        'Dùng API trả lời / gửi về shop để đánh dấu hoàn thành.',
+      );
+    }
+
+    await this.prisma.craftsmanRequest.update({
+      where: { id },
+      data: { status },
+    });
+    return this.getById(id);
+  }
+
   async postMessage(
     id: string,
     dto: PostRequestMessageDto,
@@ -116,6 +146,14 @@ export class RequestService {
         imageUrl: dto.imageUrl ?? null,
       },
     });
+
+    // Auto-promote when craftsman starts working (message / progress photo)
+    if (existing.status === RequestStatus.PENDING && !dto.sendToShop) {
+      await this.prisma.craftsmanRequest.update({
+        where: { id },
+        data: { status: RequestStatus.IN_PROGRESS },
+      });
+    }
 
     if (dto.sendToShop) {
       return this.answer(

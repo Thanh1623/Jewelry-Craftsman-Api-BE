@@ -8,6 +8,7 @@ datasource db {
 
 enum RequestStatus {
   PENDING
+  IN_PROGRESS
   ANSWERED
 
   @@map("request_status")
