@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RequestStatus {
+  PENDING
+  ANSWERED
+
+  @@map("request_status")
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  fullName     String   @map("full_name")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  answers           CraftsmanRequest[] @relation("AnsweredBy")
+  pushSubscriptions PushSubscription[]
+
+  @@map("users")
+}
+
+model CraftsmanRequest {
+  id                 String        @id @default(uuid()) @db.Uuid
+  shopRequestId      String        @unique @map("shop_request_id")
+  chatSessionId      String        @map("chat_session_id")
+  productId          String?       @map("product_id")
+  productName        String        @map("product_name")
+  productWeightGrams Float         @map("product_weight_grams")
+  productLaborCost   Int           @map("product_labor_cost")
+  productBaseSize    Int?          @map("product_base_size")
+  question           String
+  customerNote       String?       @map("customer_note")
+  replyWebhookUrl    String        @map("reply_webhook_url")
+  status             RequestStatus @default(PENDING)
+  answer             String?
+  answeredById       String?       @map("answered_by_id") @db.Uuid
+  answeredAt         DateTime?     @map("answered_at")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  answeredBy User? @relation("AnsweredBy", fields: [answeredById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@map("craftsman_requests")
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
